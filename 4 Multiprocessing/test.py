@@ -75,7 +75,7 @@ def multiprocessingCalc(sigma, model):
 
 
 if __name__ == '__main__':
-    SIGMA = 0.4
+    SIGMA = 0.005
     model = keras.models.load_model('../2 II Creation/fashion_mnist.h5')
     (_, _), (testX, testY) = fashion_mnist.load_data()
     del(_)
@@ -89,31 +89,31 @@ if __name__ == '__main__':
     # with open('model.pickle', 'wb') as file:
     #     pickle.dump(model, file, 3)
 
-    # happy_moments = 0
-    # best_solution = None
-    # sad_moments = 0
+    happy_moments = 0
+    best_solution = None
+    sad_moments = 0
 
-    # model_copy = model
-    # start_time = time.time()
-    # for sigma in range(int(SIGMA*10000)):
-    #     results = new_model(sigma, model_copy)
-    #     if results[-1] >= true_results[-1]:
-    #         if best_solution is not None:
-    #             if results[-1] > best_solution[0]:
-    #                 best_solution[0] = results[-1]
-    #                 best_solution[1] = model_copy
-    #         else:
-    #             best_solution = [results[-1], model_copy]
-    #         happy_moments += 1
-    #     else:
-    #         sad_moments += 1               
-    #     print("test loss, test acc:", results)
+    model_copy = model
+    start_time = time.time()
+    for sigma in range(int(SIGMA*10000)):
+        results = new_model(sigma, model_copy)
+        if results[-1] >= true_results[-1]:
+            if best_solution is not None:
+                if results[-1] > best_solution[0]:
+                    best_solution[0] = results[-1]
+                    best_solution[1] = model_copy
+            else:
+                best_solution = [results[-1], model_copy]
+            happy_moments += 1
+        else:
+            sad_moments += 1               
+        print("test loss, test acc:", results)
 
-    # print(f'\nHappy_moments: {happy_moments}')
-    # if happy_moments > 0:
-    #     print(f'We have a better model with accuracy: {best_solution[0]}\nYour model have {true_results[1]} accuracy')
-    # print(f'Sad moments: {sad_moments}')    
-    # print("--- LOOP STUPID METHOD %s seconds ---" % (time.time() - start_time))
+    print(f'\nHappy_moments: {happy_moments}')
+    if happy_moments > 0:
+        print(f'We have a better model with accuracy: {best_solution[0]}\nYour model have {true_results[1]} accuracy')
+    print(f'Sad moments: {sad_moments}')    
+    print("--- LOOP STUPID METHOD %s seconds ---" % (time.time() - start_time))
 
 
 

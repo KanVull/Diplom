@@ -1,3 +1,5 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 from functools import partial
 import multiprocessing
 from tensorflow.keras.datasets import fashion_mnist
@@ -5,6 +7,7 @@ from tensorflow.keras.models import Model, load_model
 from tensorflow.python.keras.layers import deserialize, serialize
 from tensorflow.python.keras.saving import saving_utils
 import numpy as np
+import time
 
 def unpack(model, training_config, weights):
     restored_model = deserialize(model)
@@ -101,12 +104,29 @@ class NeuralCrashTest():
         else:
             data = None
             print('Model not loaded')
-        print(data)                 
+        print(data)   
+
+    def stupid_run(self, sigma):
+        sigma *= 10000
+
+        if self.model is not None:
+            data = list()
+            for s in range(int(sigma)+1):
+                data.append(self._compute_models((s,s+1)))
+        else:
+            data = None
+            print('Model not loaded')
+        print(data)                    
 
 if __name__ == '__main__':
-    SIGMA = 0.1
+    SIGMA = 0.005
     work = NeuralCrashTest()
     work.load_model('../2 II Creation/fashion_mnist.h5')
     work.load_test_data()
+    now = time.time()
     work.run(SIGMA)
+    print(time.time() - now)
+    now = time.time()
+    work.stupid_run(SIGMA)
+    print(time.time() - now)
                         
