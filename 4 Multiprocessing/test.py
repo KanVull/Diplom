@@ -6,6 +6,36 @@ import numpy as np
 import time
 import multiprocessing
 from functools import partial
+import pickle
+
+from tensorflow.keras.models import Model
+from tensorflow.python.keras.layers import deserialize, serialize
+from tensorflow.python.keras.saving import saving_utils
+
+def unpack(model, training_config, weights):
+    restored_model = deserialize(model)
+    if training_config is not None:
+        restored_model.compile(
+            **saving_utils.compile_args_from_training_config(
+                training_config
+            )
+        )
+    restored_model.set_weights(weights)
+    return restored_model
+# Hotfix function
+def make_keras_picklable():
+
+    def __reduce__(self):
+        model_metadata = saving_utils.model_metadata(self)
+        training_config = model_metadata.get("training_config", None)
+        model = serialize(self)
+        weights = self.get_weights()
+        return (unpack, (model, training_config, weights))
+
+    cls = Model
+    cls.__reduce__ = __reduce__
+# Run the function
+make_keras_picklable()
 
 def new_model(sigma, model):
         model = model
@@ -56,6 +86,9 @@ if __name__ == '__main__':
     true_results = model.evaluate(testX, testY, batch_size=64)
     print("test loss, test acc:", true_results, '\n\n')
 
+    # with open('model.pickle', 'wb') as file:
+    #     pickle.dump(model, file, 3)
+
     # happy_moments = 0
     # best_solution = None
     # sad_moments = 0
@@ -82,6 +115,8 @@ if __name__ == '__main__':
     # print(f'Sad moments: {sad_moments}')    
     # print("--- LOOP STUPID METHOD %s seconds ---" % (time.time() - start_time))
 
-    data = multiprocessingCalc(SIGMA, model_copy)
-    print(data)
+
+
+    # data = multiprocessingCalc(SIGMA, model_copy)
+    # print(data)
     
