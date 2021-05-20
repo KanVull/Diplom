@@ -1,7 +1,6 @@
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-from functools import partial
 import multiprocessing
+from multiprocessing import shared_memory
+import types
 from tensorflow.keras.datasets import fashion_mnist
 from tensorflow.keras.models import Model, load_model
 from tensorflow.python.keras.layers import deserialize, serialize
@@ -34,7 +33,6 @@ def make_keras_picklable():
 # Run the function
 make_keras_picklable()
 
-
 class NeuralCrashTest():
     def __init__(self):
         self.model = None
@@ -52,7 +50,9 @@ class NeuralCrashTest():
         (_, _), (testX, testY) = fashion_mnist.load_data()
         del(_)
         testX = testX.reshape(testX.shape[0], 784) / 255
-        self.X = testX
+        shm = shared_memory.SharedMemory(create=True, size=testX.nbytes)
+        self.X = np.ndarray(testX.shape, dtype=testX.dtype, buffer=shm.buf)
+        # self.X = testX
         self.Y = testY
 
     def get_values_from_model(self, model):
