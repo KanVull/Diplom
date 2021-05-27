@@ -1,6 +1,5 @@
 import multiprocessing
 from multiprocessing import shared_memory
-import types
 from tensorflow.keras.datasets import fashion_mnist
 from tensorflow.keras.models import Model, load_model
 from tensorflow.python.keras.layers import deserialize, serialize
