@@ -1,10 +1,9 @@
 import multiprocessing
-from multiprocessing import shared_memory
+import numpy as np
 from tensorflow.keras.datasets import fashion_mnist
 from tensorflow.keras.models import Model, load_model
 from tensorflow.python.keras.layers import deserialize, serialize
 from tensorflow.python.keras.saving import saving_utils
-import numpy as np
 import time
 
 def unpack(model, training_config, weights):
@@ -49,9 +48,9 @@ class NeuralCrashTest():
         (_, _), (testX, testY) = fashion_mnist.load_data()
         del(_)
         testX = testX.reshape(testX.shape[0], 784) / 255
-        shm = shared_memory.SharedMemory(create=True, size=testX.nbytes)
-        self.X = np.ndarray(testX.shape, dtype=testX.dtype, buffer=shm.buf)
-        # self.X = testX
+        # shm = shared_memory.SharedMemory(create=True, size=testX.nbytes)
+        # self.X = np.ndarray(testX.shape, dtype=testX.dtype, buffer=shm.buf)
+        self.X = testX
         self.Y = testY
 
     def get_values_from_model(self, model):
@@ -61,8 +60,8 @@ class NeuralCrashTest():
         model.set_weights(values)
         return model
 
-    def evaluate_model(self, model):
-        results = model.evaluate(self.X, self.Y, batch_size=64)
+    def evaluate_model(self, model, testdata):
+        results = model.evaluate(testdata[0], testdata[1], batch_size=64)
         return results[-1] 
 
     def _random_numpy_normal(self, values: list, sigma):
@@ -77,7 +76,7 @@ class NeuralCrashTest():
     def _compute_models(self, sigmas):
         data = list()
         for sigma in range(int(sigmas[0]), int(sigmas[1])):
-            data.append((sigma / 10000, self.evaluate_model(self._create_new_model(sigma / 10000))))
+            data.append((sigma / 10000, self.evaluate_model(self._create_new_model(sigma / 10000), (self.X, self.Y))))
         return data  
 
 
@@ -118,7 +117,7 @@ class NeuralCrashTest():
         print(data)                    
 
 if __name__ == '__main__':
-    SIGMA = 0.005
+    SIGMA = 0.05
     work = NeuralCrashTest()
     work.load_model('../2 II Creation/fashion_mnist.h5')
     work.load_test_data()
