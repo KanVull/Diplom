@@ -1,5 +1,4 @@
-import multiprocessing
-import numpy as np
+from NeuralCrash import NeuralCrach
 from tensorflow.keras.datasets import fashion_mnist
 from tensorflow.keras.models import Model, load_model
 from tensorflow.python.keras.layers import deserialize, serialize
@@ -31,100 +30,33 @@ def make_keras_picklable():
 # Run the function
 make_keras_picklable()
 
-class NeuralCrashTest():
+class NeuralCrashTest(NeuralCrach):
     def __init__(self):
-        self.model = None
+        super().__init__()
 
-    def load_model(self, path):
-        try:
-            self.model = load_model(path)
-        except ImportError:
-            return False
-        except IOError:
-            return False
-        return True    
+    def load_model(self):
+        self.model = load_model('../2 II Creation/fashion_mnist.h5')   
 
-    def load_test_data(self):
+    def load_testdata(self):
         (_, _), (testX, testY) = fashion_mnist.load_data()
-        del(_)
         testX = testX.reshape(testX.shape[0], 784) / 255
-        # shm = shared_memory.SharedMemory(create=True, size=testX.nbytes)
-        # self.X = np.ndarray(testX.shape, dtype=testX.dtype, buffer=shm.buf)
-        self.X = testX
-        self.Y = testY
+        self.testdata = (testX, testY)
 
-    def get_values_from_model(self, model):
-        return model.get_weights()
+    def get_tested_values(self):
+        return self.model.get_weights()
 
-    def set_values_to_model(self, values, model):
-        model.set_weights(values)
-        return model
+    def set_tested_values(self, values):
+        new_model = self.model
+        new_model.set_weights(values)
+        return new_model
 
-    def evaluate_model(self, model, testdata):
-        results = model.evaluate(testdata[0], testdata[1], batch_size=64)
-        return results[-1] 
-
-    def _random_numpy_normal(self, values: list, sigma):
-        return [np.random.normal(array, sigma) for array in values]    
-
-    def _create_new_model(self, sigma):
-        model = self.model
-        weights = self.get_values_from_model(model)
-        weights = self._random_numpy_normal(weights, sigma)
-        return self.set_values_to_model(weights, model)
-
-    def _compute_models(self, sigmas):
-        data = list()
-        for sigma in range(int(sigmas[0]), int(sigmas[1])):
-            data.append((sigma / 10000, self.evaluate_model(self._create_new_model(sigma / 10000), (self.X, self.Y))))
-        return data  
-
-
-    def run(self, sigma):
-        cpu_count = multiprocessing.cpu_count() - 1
-        sigma *= 10000
-        sigma_step = int(sigma / cpu_count)
-        list_in_data = list()
-        sigma_start = 0
-        while sigma_start < sigma:
-            sigma_end = sigma_start + sigma_step
-            if sigma_end > sigma - sigma_step:
-                sigma_end = sigma + 1
-            list_in_data.append((sigma_start, sigma_end))
-            if sigma_end >= sigma:
-                break
-            sigma_start += sigma_step
-
-        if self.model is not None:
-            with multiprocessing.Pool(cpu_count) as p:
-                data = p.map(self._compute_models, list_in_data)
-            # data = self._compute_models((0, 5))
-        else:
-            data = None
-            print('Model not loaded')
-        print(data)   
-
-    def stupid_run(self, sigma):
-        sigma *= 10000
-
-        if self.model is not None:
-            data = list()
-            for s in range(int(sigma)+1):
-                data.append(self._compute_models((s,s+1)))
-        else:
-            data = None
-            print('Model not loaded')
-        print(data)                    
+    def test_model(self, model):
+        results = model.evaluate(self.testdata[0], self.testdata[1], batch_size=64)
+        return results[-1]                    
 
 if __name__ == '__main__':
-    SIGMA = 0.05
     work = NeuralCrashTest()
-    work.load_model('../2 II Creation/fashion_mnist.h5')
-    work.load_test_data()
     now = time.time()
-    work.run(SIGMA)
-    print(time.time() - now)
-    now = time.time()
-    work.stupid_run(SIGMA)
+    work.run()
     print(time.time() - now)
                         
