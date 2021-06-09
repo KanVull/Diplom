@@ -3,11 +3,14 @@ import multiprocessing
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import (
     QApplication,
+    QComboBox,
     QFileDialog,
     QMainWindow, 
     QDialog, 
     QDialogButtonBox,
     QMessageBox,
+    QSpinBox,
+    QTextEdit,
     QVBoxLayout, 
     QHBoxLayout,
     QFormLayout, 
@@ -23,8 +26,6 @@ from PyQt5.QtWidgets import (
 import os
 import sys
 import time
-
-from tensorflow.python.platform.tf_logging import error
 
 class NeuralCrach():
     def __init__(self):
@@ -91,24 +92,34 @@ class _NeuralCrashWindowUI(object):
         self.centralWidget = QWidget(self.MainWindow)
         self.centralWidgetLayout = QVBoxLayout(self.centralWidget)
         self.centralWidgetLayout.setContentsMargins(0,0,0,0)
-        
-        self.nameofpage = QLabel()
-        self.contentlayout = QVBoxLayout()
-        
-        self.setnewcentralwidget('Checking override functions', self.create_check_layout())
-        self.check_function_load_model()
+        self.setnewcentralwidget('Checking override functions', self.create_checking_widget())
 
-    def setnewcentralwidget(self, name, layout):
+    def setnewcentralwidget(self, name, widget):
         self.clearLayout(self.centralWidgetLayout)
-        self.nameofpage.setText(name)
-        self.contentlayout.addLayout(layout)
-        self.centralWidgetLayout.addWidget(self.nameofpage)
-        self.centralWidgetLayout.addLayout(self.contentlayout)
+        label = QLabel()
+        label.setText(name)
+        self.centralWidgetLayout.addWidget(label)
+        self.centralWidgetLayout.addWidget(widget)
         self.MainWindow.setCentralWidget(self.centralWidget)
         self.MainWindow.setContentsMargins(0, 0, 0, 0)
 
-    def create_check_layout(self):
-        layout = QVBoxLayout()
+    def create_checking_widget(self):
+        checkingWidget = CheckingWidget(self.neuralconfig)
+        checkingWidget.checking_ending.connect(self.create_test_config_widget)
+        return checkingWidget
+
+    def create_test_config_widget(self, neuralconfig):
+        self.neuralconfig = neuralconfig
+        testConfigWidget = TestConfigWidget()
+        self.setnewcentralwidget('Set test configuration', testConfigWidget)
+
+class CheckingWidget_UI(object):
+    checking_ending = QtCore.pyqtSignal(NeuralCrach)
+
+    def setupUI(self, widget, neuralconfig):
+        self.neuralconfig = neuralconfig
+        self.layout = QVBoxLayout(widget)
+
         status = QFormLayout()
         self.error = QPlainTextEdit()
         self.error.setReadOnly(True)
@@ -134,9 +145,9 @@ class _NeuralCrashWindowUI(object):
         status.addRow('set_tested_values',  self.label_set_tested_values)
         status.addRow('test_model',         self.label_test_model)
 
-        layout.addLayout(status)
-        layout.addWidget(self.error)
-        return layout
+        self.layout.addLayout(status)
+        self.layout.addWidget(self.error)
+        self.check_function_load_model()
 
     def errorprint(self, text, checked_functions):
         self.error.appendPlainText(checked_functions + '\n' + text + '\n\n\t--------\n\n')
@@ -261,8 +272,166 @@ class _NeuralCrashWindowUI(object):
         for status in status_tuple:
             if status != 'OK':
                 return     
-        self.load_config_label()
+        self.checking_ending.emit(self.neuralconfig)
+
+class CheckingWidget(QWidget, CheckingWidget_UI):
+    def __init__(self, neuralconfig, parent=None):
+        super(CheckingWidget, self).__init__(parent) 
+        self.setupUI(self, neuralconfig)
+
+
+class TestConfigWidget_UI(object):
+    config = [i/10000 for i in range(0,1001,20)]
+    config_changed = QtCore.pyqtSignal()
+
+    def setupUI(self, widget):
+        self.layout = QVBoxLayout(widget)
+        
+        self.config_layout = QFormLayout()
+
+        self.num_processors = QSpinBox()
+        self.num_processors.setMinimum(1)
+        self.num_processors.setMaximum(self.getMaximumProcessorCount())
+        label_processors = QLabel()
+        label_processors.setText('Specify the number of processors used')
+        self.config_layout.addRow(self.num_processors, label_processors)
+
+        algorithms = GeneratingRandomAlgorithms()
+        self.algorithmComboBox = QComboBox()
+        self.algorithmComboBox.addItems(algorithms.names)
+        algorithmLabel = QLabel()
+        algorithmLabel.setText('Choose algorithm')
+        self.config_layout.addRow(self.algorithmComboBox, algorithmLabel)
+
+        self.layout.addLayout(self.config_layout)
+
+    ## sigma widget
+        self.sigmalayout = QVBoxLayout()
+        
+        ## 0 - start; 1 - stop; 2 - step; 3 - The number of tests at each step
+        layouts_edits = [QVBoxLayout() for _ in range(4)]
+
+        labels_edits = [QLabel() for _ in range(4)]
+        labels_edits[0].setText('Start')
+        labels_edits[1].setText('Stop')
+        labels_edits[2].setText('Step')
+        labels_edits[3].setText('NTES')
+        labels_edits[3].setToolTip('The number of tests at each step')
+
+        self.line_edits = [QLineEdit() for _ in range(4)]
+        for i in range(3):
+            self.line_edits[i].setToolTip('Int or float number; . is delimiter')
+        self.line_edits[3].setToolTip('Int number > 0')
+
+        self.line_edits[0].setText('0')
+        self.line_edits[1].setText('0.005')
+        self.line_edits[2].setText('0.0001')
+        for i in range(4):
+            self.line_edits[i].textEdited.connect(self.update)
+        self.line_edits[3].setText('1')    
+
+        layout_sssc = QHBoxLayout()
+        for i in range(4):
+            layouts_edits[i].addWidget(labels_edits[i])
+            layouts_edits[i].addWidget(self.line_edits[i])
+            layout_sssc.addLayout(layouts_edits[i])
+
+        self.preview = QLabel()
+        self.preview.setText('jope')
+
+        self.sigmalayout.addLayout(layout_sssc)
+        self.sigmalayout.addWidget(self.preview)
+
+        self.config_changed.connect(self.setConfig)
+        self.layout.addLayout(self.sigmalayout)
+
+    ## sigma ended
+
+        self.buttonstart = QPushButton()
+        self.buttonstart.clicked.connect(self.onStarted)
+        self.setConfig()
+        self.buttonstart.setText('Start test')
+        self.layout.addWidget(self.buttonstart)  
+
+        self.num_processors.valueChanged[int].connect(self.update) 
+
+    def getMaximumProcessorCount(self):
+        return multiprocessing.cpu_count()    
+
+    def setError(self, text):
+        self.preview.setText('Config error | ' + text)
+        self.config = None
+        self.config_changed.emit()
+
+    def update(self):
+        numbers = (edit.text() for edit in self.line_edits)
+        try:
+            start = float(numbers[0])
+            stop = float(numbers[1])
+            step = float(numbers[2])
+            ntes = int(numbers[3])
+        except Exception:
+            self.setError('Wrong numbers')
+            return
+        self.line_edits[3] = ntes    
+        if start > stop:
+            self.setError('Start > Stop')
+            return
+        elif (stop - start) / step < 1:
+            self.setError('Unavailable Step')
+            return
+        elif ntes < 1:
+            self.setError('NTES must be over 0')
+            return
+        self.config = np.arange(start, stop, step)
+        if ntes > 1:
+            self.config = np.repeat(self.config, ntes)
+        if len(self.config) > 8:
+            self.preview.setText('[' + ', '.join(self.config[:3]) + ', ..., ' + ', '.join(self.config[-3:]) + ']')
+        else:
+            self.preview.setText('[' + ', '.join(self.config) + ']') 
+        self.config_changed.emit()       
+
+    def setConfig(self):
+        self.buttonstart.setEnabled(self.config is not None)
+
+    def onStarted(self):
+        print(self.config)  
+
     
+
+class TestConfigWidget(QWidget, TestConfigWidget_UI):
+    def __init__(self, parent=None):
+        super(TestConfigWidget, self).__init__(parent) 
+        self.setupUI(self)
+
+
+class GeneratingRandomAlgorithms():
+    names = [
+        'normal',
+        'not_normal'
+    ]
+
+
+class TestingWidget_UI(object):
+    def setupUI(self):
+        pass
+
+class TestingWidget(QWidget, TestingWidget_UI):
+    def __init__(self, parent=None):
+        super(TestingWidget, self).__init__(parent) 
+        self.setupUI(self)
+
+
+class ResultWidget_UI(object):
+    def setupUI(self):
+        pass
+
+class ResultWidget(QWidget, ResultWidget_UI):
+    def __init__(self, parent=None):
+        super(ResultWidget, self).__init__(parent) 
+        self.setupUI(self)
+
 
 class CheckingAnimation(QtCore.QThread):
     time_passes = QtCore.pyqtSignal()
@@ -308,7 +477,7 @@ class Check_function(QtCore.QObject):
             self.function_checked_signal.emit(self.name, 'ERROR')
             self.error_signal.emit(str(e), self.name)
 
-        self.return_new_state.emit(self.neuralconfig)    
+        self.return_new_state.emit(self.neuralconfig)  
         self.done.emit()      
 
 class _NeuralCrashWindow(QMainWindow, _NeuralCrashWindowUI):
