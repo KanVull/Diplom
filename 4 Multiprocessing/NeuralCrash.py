@@ -29,17 +29,22 @@ import os
 import sys
 import time
 from math import ceil
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
-from matplotlib import path, patches
 import matplotlib
 import datetime
 
 class NeuralCrach():
     def __init__(self):
         self.model = None
-        self.sigma = None
-        self.test_value = None
+        self._name = 'NoName'
+        self._sigma = None
+        self._test_value = None
+
+    def setName(self, name_of_model):
+        self._name = name_of_model    
  
     def run(self):
         app = QApplication(sys.argv)
@@ -217,7 +222,7 @@ class CheckingWidget(QWidget, CheckingWidget_UI):
 
 class TestConfigWidget_UI(object):
     done = QtCore.pyqtSignal(object)
-    config = np.repeat([i/10000 for i in range(0,1001,20)], 5)
+    config = np.repeat([i/10000 for i in range(0,1001,20)], 1)
     config_changed = QtCore.pyqtSignal()
 
     def setupUI(self, widget):
@@ -426,14 +431,43 @@ class TestingWidget(QWidget, TestingWidget_UI):
         self.setupUI(self, data, neuralconfig)
 
 
+class MplCanvas(FigureCanvasQTAgg):
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = fig.add_subplot(111)
+        super(MplCanvas, self).__init__(fig)
+
 class ResultWidget_UI(object):
-    def setupUI(self, widget, data, test_value):
+    another_test = QtCore.pyqtSignal()
+    def setupUI(self, widget, data, test_value, name):
         self.data = data
         self.test_value = test_value
+        self.test_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        self.name = name
 
         self.layout = QVBoxLayout(widget)
         self.getXY_values()
-        self.layout.addWidget(self.getGraph())
+        self.toolbar, self.canvas = self.getGraph()
+        self.layout.addWidget(self.toolbar)
+        self.layout.addWidget(self.canvas)
+
+        button_save_excel = QPushButton()
+        button_save_excel.setText('Save to Excel')
+        button_save_txt = QPushButton()
+        button_save_txt.setText('Save to txt')
+        button_another_test = QPushButton()
+        button_another_test.setText('Try another config')
+        button_save_excel.clicked.connect(lambda: self.save('excel'))
+        button_save_txt.clicked.connect(lambda: self.save('txt'))
+        button_another_test.clicked.connect(lambda: self.another_test.emit())
+        
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addWidget(button_another_test)
+        buttons_layout.addStretch(0)
+        buttons_layout.addWidget(button_save_excel)
+        buttons_layout.addWidget(button_save_txt)
+
+        self.layout.addLayout(buttons_layout)
 
     def getXY_values(self):
         XY_data = {}
@@ -474,24 +508,54 @@ class ResultWidget_UI(object):
         self.data = XY_data                   
 
     def getGraph(self):
-        canvas = FigureCanvas(plt.Figure(figsize=(15, 6)))
         font = {
             'weight': 'normal',
             'size': 12
         }
+        matplotlib.use('Qt5Agg')
         matplotlib.rc('font', **font)
 
-        ax = canvas.figure.subplots()
+        sc = MplCanvas(self, width=5, height=5, dpi=100)
 
-        ax.plot(list(self.data.keys()), list(self.data.items()))
-        
-        canvas.draw()
-        return canvas
+        sc.axes.plot(list(self.data.keys()), list(self.data.values()))
+        sc.axes.set_xlabel('Sigma')
+        sc.axes.set_ylabel('Test results')
+        sc.axes.set_title(self.name + ' | ' + self.test_time)
+        toolbar = NavigationToolbar2QT(sc, self)
+
+        return toolbar, sc
+
+    def save(self, save_type):
+        data = {
+            'name': self.name,
+            'data': self.data,
+            'time': self.test_time,
+            'test_value': self.test_value,
+        }
+        saver = Saver(data, save_type)
+        saver.save()
 
 class ResultWidget(QWidget, ResultWidget_UI):
-    def __init__(self, data, test_value, parent=None):
+    def __init__(self, data, test_value, name, parent=None):
         super(ResultWidget, self).__init__(parent) 
-        self.setupUI(self, data, test_value)
+        self.setupUI(self, data, test_value, name)
+
+class Saver():
+    def __init__(self, data, save_type):
+        self.data = data
+        self.save_type = save_type
+
+    def save(self):
+        if self.save_type == 'excel':
+            self.__save_to_excel()
+        elif self.save_type == 'txt':
+            self.__save_to_txt()
+
+    def __save_to_excel(self):
+        pass
+
+    def __save_to_txt(self):
+        pass                 
 
 
 class AnimationTimer(QtCore.QThread):
@@ -531,7 +595,7 @@ class Check_function(QtCore.QObject):
                 self.neuralconfig.set_tested_values(self.neuralconfig._basedata)
 
             elif self.name == 'test_model':
-                self.neuralconfig.test_value = self.neuralconfig.test_model(self.neuralconfig.model, self.neuralconfig.testdata)
+                self.neuralconfig._test_value = self.neuralconfig.test_model(self.neuralconfig.model, self.neuralconfig.testdata)
 
             self.function_checked_signal.emit(self.name, 'OK')    
         except Exception as e:
@@ -621,7 +685,8 @@ class _NeuralCrashWindowUI(object):
         self.centralWidget = QWidget(self.MainWindow)
         self.centralWidgetLayout = QVBoxLayout(self.centralWidget)
         self.centralWidgetLayout.setContentsMargins(0,0,0,0)
-        self.setnewcentralwidget('Checking override functions', self.create_checking_widget())
+        self.create_checking_widget()
+        
 
     def setnewcentralwidget(self, name, widget):
         self.clearLayout(self.centralWidgetLayout)
@@ -635,7 +700,7 @@ class _NeuralCrashWindowUI(object):
     def create_checking_widget(self):
         checkingWidget = CheckingWidget(self.neuralconfig)
         checkingWidget.checking_ending.connect(self.create_test_config_widget)
-        return checkingWidget
+        self.setnewcentralwidget('Checking override functions', checkingWidget)
 
     def create_test_config_widget(self, neuralconfig):
         self.neuralconfig = neuralconfig
@@ -646,10 +711,11 @@ class _NeuralCrashWindowUI(object):
     def start_testing(self, data):
         testingWidget = TestingWidget(data, self.neuralconfig)
         testingWidget.done.connect(self.load_graph_widget)
-        self.setnewcentralwidget('Testing...', testingWidget)
+        self.setnewcentralwidget('Testing', testingWidget)
 
     def load_graph_widget(self, data):
-        resultWidget = ResultWidget(data, self.neuralconfig.test_value)
+        resultWidget = ResultWidget(data, self.neuralconfig._test_value, self.neuralconfig._name)
+        resultWidget.another_test.connect(lambda: self.create_test_config_widget(self.neuralconfig))
         self.setnewcentralwidget('Result', resultWidget)    
 
 class _NeuralCrashWindow(QMainWindow, _NeuralCrashWindowUI):
