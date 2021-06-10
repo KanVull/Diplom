@@ -1,3 +1,4 @@
+import PyQt5
 from tensorflow import keras
 from tensorflow.keras import models
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
@@ -7,6 +8,8 @@ import time
 import multiprocessing
 from functools import partial
 import pickle
+import copy
+from PyQt5 import QtCore, QtGui
 
 from tensorflow.keras.models import Model
 from tensorflow.python.keras.layers import deserialize, serialize
@@ -37,86 +40,85 @@ def make_keras_picklable():
 # Run the function
 make_keras_picklable()
 
-def new_model(sigma, model):
-        model = model
-        for variable in model.weights:
-            if type(variable) == ResourceVariable:
-                arr = np.array(variable)
-                new_weights = np.random.normal(arr, sigma/10000)
-                variable.assign(new_weights)
-        results = model.evaluate(testX, testY, batch_size=64)           
-        return results    
+class Data():
+    model = None
+    signal = QtCore.pyqtSignal(int)
+    def load_model(self):
+        self.model = models.load_model('../2 II Creation/fashion_mnist.h5')   
 
-def compute_models(model, sigmas):
-    data = list()
-    for sigma in range(int(sigmas[0]), int(sigmas[1])):
-        data.append(new_model(sigma, model))
-    return data   
+    def load_testdata(self):
+        (_, _), (testX, testY) = fashion_mnist.load_data()
+        testX = testX.reshape(testX.shape[0], 784) / 255
+        self.testdata = (testX, testY)
 
-def multiprocessingCalc(sigma, model):
-    cpu_count = multiprocessing.cpu_count() - 1
-    sigma *= 10000
-    sigma_step = int(sigma / cpu_count)
-    list_in_data = list()
-    sigma_start = 0
-    while sigma_start < sigma:
-        sigma_end = sigma_start + sigma_step
-        if sigma_end > sigma - sigma_step:
-            sigma_end = sigma + 1
-        list_in_data.append((sigma_start, sigma_end))
-        if sigma_end >= sigma:
-            break
-        sigma_start += sigma_step 
+    def get_tested_values(self):
+        return self.model.get_weights()
 
-    with multiprocessing.Pool(cpu_count) as p:
-        data = p.map(partial(compute_models, model=model), list_in_data)
+    def set_tested_values(self, values):
+        new_model = copy.deepcopy(self.model)
+        new_model.set_weights(values)
+        return new_model
 
-    return data
+    def test_model(self, model, data):
+        results = model.evaluate(data[0], data[1], batch_size=64)
+        return results[-1]               
+
+    def _random_numpy_normal(self, values: list, sigma):
+        return [np.random.normal(array, sigma) for array in values]    
+
+    def _create_new_model(self, sigma, weights):
+        weights = self._random_numpy_normal(weights, sigma)
+        return self.set_tested_values(weights)
+
+    def _compute_models(self, sigmas):
+        data = list()
+        weights = self.get_tested_values()
+        all_have_to_do = int(sigmas[1]) -  int(sigmas[0])
+        for index, sigma in enumerate(range(int(sigmas[0]), int(sigmas[1]))):
+            data.append((sigma / 10000, self.test_model(self._create_new_model(sigma / 10000, weights), self.testdata)))
+            self.signal.emit(all_have_to_do - index)
+        return data  
+
+    def multiprocessingCalc(self, sigma):
+        cpu_count = multiprocessing.cpu_count() - 1
+        sigma *= 10000
+        sigma_step = int(sigma / cpu_count)
+        list_in_data = list()
+        sigma_start = 0
+        while sigma_start < sigma:
+            sigma_end = sigma_start + sigma_step
+            if sigma_end > sigma - sigma_step:
+                sigma_end = sigma + 1
+            list_in_data.append((sigma_start, sigma_end))
+            if sigma_end >= sigma:
+                break
+            sigma_start += sigma_step
+
+        self.signal.connect(lambda: print('jija'))
+
+        if self.model is not None:
+            with multiprocessing.Pool(cpu_count) as p:
+                data = p.map_async(self._compute_models, list_in_data)
+                data = data.get()
+                # while (True):
+                #     if (data.ready()): break
+                #     remaining = data._number_left
+                #     print ("Waiting for", remaining, "tasks to complete...")
+                #     time.sleep(0.5)
+        else:
+            data = None
+            print('Model not loaded')
+        print(data)
 
 
 if __name__ == '__main__':
-    SIGMA = 0.005
-    model = keras.models.load_model('../2 II Creation/fashion_mnist.h5')
-    (_, _), (testX, testY) = fashion_mnist.load_data()
-    del(_)
-    testX = testX.reshape(testX.shape[0], 784) / 255
-    
-    model_copy = model
-    print("Evaluate on test data")
-    true_results = model.evaluate(testX, testY, batch_size=64)
-    print("test loss, test acc:", true_results, '\n\n')
+    SIGMA = 0.05
 
-    # with open('model.pickle', 'wb') as file:
-    #     pickle.dump(model, file, 3)
-
-    happy_moments = 0
-    best_solution = None
-    sad_moments = 0
-
-    model_copy = model
-    start_time = time.time()
-    for sigma in range(int(SIGMA*10000)):
-        results = new_model(sigma, model_copy)
-        if results[-1] >= true_results[-1]:
-            if best_solution is not None:
-                if results[-1] > best_solution[0]:
-                    best_solution[0] = results[-1]
-                    best_solution[1] = model_copy
-            else:
-                best_solution = [results[-1], model_copy]
-            happy_moments += 1
-        else:
-            sad_moments += 1               
-        print("test loss, test acc:", results)
-
-    print(f'\nHappy_moments: {happy_moments}')
-    if happy_moments > 0:
-        print(f'We have a better model with accuracy: {best_solution[0]}\nYour model have {true_results[1]} accuracy')
-    print(f'Sad moments: {sad_moments}')    
-    print("--- LOOP STUPID METHOD %s seconds ---" % (time.time() - start_time))
-
-
-
-    # data = multiprocessingCalc(SIGMA, model_copy)
+    data = Data()
+    data.load_model()
+    data.load_testdata()
+    t = time.time()
+    data.multiprocessingCalc(SIGMA)
+    print(time.time() - t)
     # print(data)
     

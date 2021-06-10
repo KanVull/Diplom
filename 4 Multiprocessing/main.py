@@ -50,8 +50,8 @@ class NeuralCrashTest(NeuralCrach):
         new_model.set_weights(values)
         return new_model
 
-    def test_model(self, model):
-        results = model.evaluate(self.testdata[0], self.testdata[1], batch_size=64)
+    def test_model(self, model, data):
+        results = model.evaluate(data[0], data[1], batch_size=64)
         return results[-1]                    
 
 if __name__ == '__main__':

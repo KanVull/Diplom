@@ -1,5 +1,6 @@
 import numpy as np
 import multiprocessing
+from multiprocessing import shared_memory
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import (
     QApplication,
@@ -9,6 +10,7 @@ from PyQt5.QtWidgets import (
     QDialog, 
     QDialogButtonBox,
     QMessageBox,
+    QProgressBar,
     QSpinBox,
     QTextEdit,
     QVBoxLayout, 
@@ -26,92 +28,24 @@ from PyQt5.QtWidgets import (
 import os
 import sys
 import time
+from math import ceil
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+import matplotlib.pyplot as plt
+from matplotlib import path, patches
+import matplotlib
+import datetime
 
 class NeuralCrach():
     def __init__(self):
         self.model = None
         self.sigma = None
-
-    def _random_numpy_normal(self, values: list, sigma):
-        return [np.random.normal(array, sigma) for array in values]    
-
-    def _create_new_model(self, sigma):
-        model = self.model
-        weights = self.get_values_from_model(model)
-        weights = self._random_numpy_normal(weights, sigma)
-        return self.set_values_to_model(weights, model)
-
-    def _compute_models(self, sigmas):
-        data = list()
-        for sigma in range(int(sigmas[0]), int(sigmas[1])):
-            data.append((sigma / 10000, self.evaluate_model(self._create_new_model(sigma / 10000), self.testdata)))
-        return data  
-
-
+        self.test_value = None
+ 
     def run(self):
         app = QApplication(sys.argv)
         ex = _NeuralCrashWindow(self)
         ex.show()
-        app.exec_()
-
-        # cpu_count = multiprocessing.cpu_count() - 1
-        # sigma *= 10000
-        # sigma_step = int(sigma / cpu_count)
-        # list_in_data = list()
-        # sigma_start = 0
-        # while sigma_start < sigma:
-        #     sigma_end = sigma_start + sigma_step
-        #     if sigma_end > sigma - sigma_step:
-        #         sigma_end = sigma + 1
-        #     list_in_data.append((sigma_start, sigma_end))
-        #     if sigma_end >= sigma:
-        #         break
-        #     sigma_start += sigma_step
-
-        # if self.model is not None:
-        #     with multiprocessing.Pool(cpu_count) as p:
-        #         data = p.map(self._compute_models, list_in_data)
-        # else:
-        #     data = None
-        #     print('Model not loaded')
-        # print(data)
-
-class _NeuralCrashWindowUI(object):
-    def clearLayout(self, layout):
-        while layout.count():
-            child = layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()    
-
-    def setupUI(self, MainWindow, neuralconfig):
-        self.neuralconfig = neuralconfig
-        self.MainWindow = MainWindow
-        self.MainWindow.setWindowTitle('Test your neural')
-        self.MainWindow.resize(500, 500)
-
-        self.centralWidget = QWidget(self.MainWindow)
-        self.centralWidgetLayout = QVBoxLayout(self.centralWidget)
-        self.centralWidgetLayout.setContentsMargins(0,0,0,0)
-        self.setnewcentralwidget('Checking override functions', self.create_checking_widget())
-
-    def setnewcentralwidget(self, name, widget):
-        self.clearLayout(self.centralWidgetLayout)
-        label = QLabel()
-        label.setText(name)
-        self.centralWidgetLayout.addWidget(label)
-        self.centralWidgetLayout.addWidget(widget)
-        self.MainWindow.setCentralWidget(self.centralWidget)
-        self.MainWindow.setContentsMargins(0, 0, 0, 0)
-
-    def create_checking_widget(self):
-        checkingWidget = CheckingWidget(self.neuralconfig)
-        checkingWidget.checking_ending.connect(self.create_test_config_widget)
-        return checkingWidget
-
-    def create_test_config_widget(self, neuralconfig):
-        self.neuralconfig = neuralconfig
-        testConfigWidget = TestConfigWidget()
-        self.setnewcentralwidget('Set test configuration', testConfigWidget)
+        app.exec_()   
 
 class CheckingWidget_UI(object):
     checking_ending = QtCore.pyqtSignal(NeuralCrach)
@@ -179,7 +113,7 @@ class CheckingWidget_UI(object):
         self.neuralconfig = new_state
 
     def check_function_load_model(self):
-        self.threadAnim_load_model = CheckingAnimation()
+        self.threadAnim_load_model = AnimationTimer(0.3)
         self.threadWork_load_model = QtCore.QThread()
         self.QObject_load_model = Check_function(self.neuralconfig, 'load_model')
         self.QObject_load_model.moveToThread(self.threadWork_load_model)
@@ -196,7 +130,7 @@ class CheckingWidget_UI(object):
         self.threadWork_load_model.start()
 
     def check_function_load_testdata(self):
-        self.threadAnim_load_testdata = CheckingAnimation()
+        self.threadAnim_load_testdata = AnimationTimer(0.3)
         self.threadWork_load_testdata = QtCore.QThread()
         self.QObject_load_testdata = Check_function(self.neuralconfig, 'load_testdata')
         self.QObject_load_testdata.moveToThread(self.threadWork_load_testdata)
@@ -213,7 +147,7 @@ class CheckingWidget_UI(object):
         self.threadWork_load_testdata.start()
 
     def check_function_get_tested_values(self):
-        self.threadAnim_get_tested_values = CheckingAnimation()
+        self.threadAnim_get_tested_values = AnimationTimer(0.3)
         self.threadWork_get_tested_values = QtCore.QThread()
         self.QObject_get_tested_values = Check_function(self.neuralconfig, 'get_tested_values')
         self.QObject_get_tested_values.moveToThread(self.threadWork_get_tested_values)
@@ -230,7 +164,7 @@ class CheckingWidget_UI(object):
         self.threadWork_get_tested_values.start()
 
     def check_function_set_tested_values(self):
-        self.threadAnim_set_tested_values = CheckingAnimation()
+        self.threadAnim_set_tested_values = AnimationTimer(0.3)
         self.threadWork_set_tested_values = QtCore.QThread()
         self.QObject_set_tested_values = Check_function(self.neuralconfig, 'set_tested_values')
         self.QObject_set_tested_values.moveToThread(self.threadWork_set_tested_values)
@@ -246,7 +180,7 @@ class CheckingWidget_UI(object):
         self.threadWork_set_tested_values.start()
 
     def check_function_test_model(self):
-        self.threadAnim_test_model = CheckingAnimation()
+        self.threadAnim_test_model = AnimationTimer(0.3)
         self.threadWork_test_model = QtCore.QThread()
         self.QObject_test_model = Check_function(self.neuralconfig, 'test_model')
         self.QObject_test_model.moveToThread(self.threadWork_test_model)
@@ -254,6 +188,7 @@ class CheckingWidget_UI(object):
         self.threadWork_test_model.started.connect(self.QObject_test_model.run)
         self.QObject_test_model.function_checked_signal.connect(self.update_status)
         self.QObject_test_model.error_signal.connect(self.errorprint)
+        self.QObject_get_tested_values.return_new_state.connect(self.update_NeuralCrash)
         self.QObject_test_model.done.connect(self.threadAnim_test_model.requestInterruption)
         self.QObject_test_model.done.connect(self.end_checking)
         self.threadAnim_test_model.time_passes.connect(lambda: self.update_label(self.label_test_model))
@@ -281,7 +216,8 @@ class CheckingWidget(QWidget, CheckingWidget_UI):
 
 
 class TestConfigWidget_UI(object):
-    config = [i/10000 for i in range(0,1001,20)]
+    done = QtCore.pyqtSignal(object)
+    config = np.repeat([i/10000 for i in range(0,1001,20)], 5)
     config_changed = QtCore.pyqtSignal()
 
     def setupUI(self, widget):
@@ -292,6 +228,7 @@ class TestConfigWidget_UI(object):
         self.num_processors = QSpinBox()
         self.num_processors.setMinimum(1)
         self.num_processors.setMaximum(self.getMaximumProcessorCount())
+        self.num_processors.setValue(self.num_processors.maximum())
         label_processors = QLabel()
         label_processors.setText('Specify the number of processors used')
         self.config_layout.addRow(self.num_processors, label_processors)
@@ -396,9 +333,12 @@ class TestConfigWidget_UI(object):
         self.buttonstart.setEnabled(self.config is not None)
 
     def onStarted(self):
-        print(self.config)  
-
-    
+        data = {
+            'algorithm': self.algorithmComboBox.currentText(),
+            'config': self.config,
+            'processors': int(self.num_processors.text())
+        }
+        self.done.emit(data) 
 
 class TestConfigWidget(QWidget, TestConfigWidget_UI):
     def __init__(self, parent=None):
@@ -406,42 +346,164 @@ class TestConfigWidget(QWidget, TestConfigWidget_UI):
         self.setupUI(self)
 
 
-class GeneratingRandomAlgorithms():
-    names = [
-        'normal',
-        'not_normal'
-    ]
-
-
 class TestingWidget_UI(object):
-    def setupUI(self):
-        pass
+    done = QtCore.pyqtSignal(object)
+    def setupUI(self, widget, data, neuralconfig):
+        self.data = data
+        self.neuralconfig = neuralconfig
+        
+        self.layout = QVBoxLayout(widget)
+        self.label_average = QLabel()
+        self.label_average.setText('time left')
+        self.label_average.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignBottom)
+        self.layout.addWidget(self.label_average)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(len(data['config']))
+        self.layout.addWidget(self.progress_bar)
+
+        self.previous_pos = 0
+        self.seconds_per_operation = 0
+        self.seconds_per_operation_list = list()
+
+        self.start_test()
+
+    def start_test(self):
+        self.threadTimer = AnimationTimer(0.5)
+        self.shm = shared_memory.ShareableList([0], name='Progress')
+        self.threadWork = Testing_function(self.data, self.neuralconfig, self.shm.shm.name)
+        self.threadWork.done.connect(self.threadTimer.requestInterruption)
+        self.threadWork.done.connect(self.load_graph)
+        self.threadTimer.time_passes.connect(self.update_progress)
+
+        self.threadWork.start()
+        self.threadTimer.start()
+
+    def getTime(self):
+        if not self.seconds_per_operation_list:
+            return 'time'
+        if len(self.seconds_per_operation_list) > 100:
+            self.seconds_per_operation_list.pop(0)
+        average_time = np.average(self.seconds_per_operation_list)
+        seconds_left = average_time * (self.progress_bar.maximum() - self.previous_pos) 
+        m, s = divmod(int(seconds_left), 60)
+        h, m = divmod(m, 60)
+        if h != 0:
+            return f'Average {h} hours'
+        if m != 0:
+            return f'Average {m} minutes'    
+        return f'{s} seconds'
+
+    def update_progress(self):
+        current_pos = self.shm[0]
+        tick = self.threadTimer.tick_time
+        if current_pos != self.previous_pos:
+            diff = current_pos - self.previous_pos
+            if diff > 1:
+                if self.seconds_per_operation != 0:
+                    self.seconds_per_operation_list.append(self.seconds_per_operation)
+                diff -= 1
+                for _ in range(diff):
+                    self.seconds_per_operation_list.append(tick / diff)
+            else:
+                self.seconds_per_operation_list.append(self.seconds_per_operation)
+            self.seconds_per_operation = 0
+            self.previous_pos = current_pos    
+        else:
+            self.seconds_per_operation += tick
+
+        self.label_average.setText(self.getTime() + ' left')
+        self.progress_bar.setValue(self.shm[0])
+
+    def load_graph(self, data):
+        del(self.shm)
+        self.done.emit(data)
 
 class TestingWidget(QWidget, TestingWidget_UI):
-    def __init__(self, parent=None):
+    def __init__(self, data, neuralconfig, parent=None):
         super(TestingWidget, self).__init__(parent) 
-        self.setupUI(self)
+        self.setupUI(self, data, neuralconfig)
 
 
 class ResultWidget_UI(object):
-    def setupUI(self):
-        pass
+    def setupUI(self, widget, data, test_value):
+        self.data = data
+        self.test_value = test_value
+
+        self.layout = QVBoxLayout(widget)
+        self.getXY_values()
+        self.layout.addWidget(self.getGraph())
+
+    def getXY_values(self):
+        XY_data = {}
+        self.minX, self.minY, self.maxX, self.maxY = None, None, None, None
+        for lst in self.data:
+            for sigma_result in lst:
+                if sigma_result[0] in XY_data:
+                    XY_data[sigma_result[0]].append(sigma_result[1])
+                else:
+                    XY_data[sigma_result[0]] = [sigma_result[1]]
+            del(sigma_result)        
+        del(lst)            
+        for key in XY_data.keys():
+            # min max X
+            if self.maxX is None:
+                self.maxX = key
+            elif key > self.maxX:
+                self.maxX = key
+            if self.minX is None:
+                self.minX = key    
+            elif key < self.minX:
+                self.minX = key
+
+            # counting Y
+            if len(XY_data[key]) > 1:
+                XY_data[key] = np.average(XY_data[key])
+
+            # min max Y
+            if self.maxY is None:
+                self.maxY = XY_data[key] 
+            elif XY_data[key]  > self.maxY:
+                self.maxY = XY_data[key]
+            if self.minY is None:
+                self.minY = XY_data[key]     
+            elif XY_data[key]  < self.minY:
+                self.minY = XY_data[key] 
+
+        self.data = XY_data                   
+
+    def getGraph(self):
+        canvas = FigureCanvas(plt.Figure(figsize=(15, 6)))
+        font = {
+            'weight': 'normal',
+            'size': 12
+        }
+        matplotlib.rc('font', **font)
+
+        ax = canvas.figure.subplots()
+
+        ax.plot(list(self.data.keys()), list(self.data.items()))
+        
+        canvas.draw()
+        return canvas
 
 class ResultWidget(QWidget, ResultWidget_UI):
-    def __init__(self, parent=None):
+    def __init__(self, data, test_value, parent=None):
         super(ResultWidget, self).__init__(parent) 
-        self.setupUI(self)
+        self.setupUI(self, data, test_value)
 
 
-class CheckingAnimation(QtCore.QThread):
+class AnimationTimer(QtCore.QThread):
     time_passes = QtCore.pyqtSignal()
-    def __init__(self):
+    def __init__(self, tick_time):
         QtCore.QThread.__init__(self)
+        self.tick_time = tick_time
 
     def run(self):
         while not self.isInterruptionRequested():
             self.time_passes.emit()
-            time.sleep(0.5)
+            time.sleep(self.tick_time)
 
 class Check_function(QtCore.QObject):
     return_new_state = QtCore.pyqtSignal(NeuralCrach)
@@ -467,10 +529,9 @@ class Check_function(QtCore.QObject):
 
             elif self.name == 'set_tested_values':
                 self.neuralconfig.set_tested_values(self.neuralconfig._basedata)
-                del(self.neuralconfig._basedata)
 
             elif self.name == 'test_model':
-                self.neuralconfig.test_model(self.neuralconfig.model)
+                self.neuralconfig.test_value = self.neuralconfig.test_model(self.neuralconfig.model, self.neuralconfig.testdata)
 
             self.function_checked_signal.emit(self.name, 'OK')    
         except Exception as e:
@@ -480,7 +541,119 @@ class Check_function(QtCore.QObject):
         self.return_new_state.emit(self.neuralconfig)  
         self.done.emit()      
 
+class Testing_function(QtCore.QThread):
+    done = QtCore.pyqtSignal(object)
+
+    def __init__(self, data, neuralconfig, shm_name):
+        QtCore.QObject.__init__(self)
+        self.data = data
+        self.algorithm = GeneratingRandomAlgorithms()
+        self.neuralconfig = neuralconfig
+        self.shm_name = shm_name
+
+    def run(self):
+        multiprocessExecution = MultiprocessExecution(self.data, self.neuralconfig, self.shm_name)
+        data = multiprocessExecution.multiprocessingCalc()
+        self.done.emit(data) 
+
+class MultiprocessExecution():
+    def __init__(self, data, neuralconfig, shm_name):
+        self.data = data
+        self.algorithm = GeneratingRandomAlgorithms()
+        self.neuralconfig = neuralconfig
+        self.shm_name = shm_name
+
+    def _create_new_model(self, sigma):
+        new_weights = self.algorithm.generate(self.neuralconfig._basedata, sigma, self.data['algorithm'])
+        return self.neuralconfig.set_tested_values(new_weights)
+
+    def _compute_models(self, sigmas):
+        data = list()
+        shm = shared_memory.ShareableList(name=self.shm_name)
+        for sigma in sigmas:
+            model = self._create_new_model(sigma)
+            data.append((sigma, self.neuralconfig.test_model(model, self.neuralconfig.testdata)))
+            del(model)
+            shm[0] += 1
+        return data  
+
+    def multiprocessingCalc(self):
+        sigmas = self.data['config']
+        cpu_count = self.data['processors']
+        process_step = ceil(len(sigmas) / cpu_count)
+        list_in_data = list()
+        for i in range(ceil(len(sigmas) / process_step)):
+            end = i * process_step + process_step if i + process_step <= len(sigmas) else len(sigmas)
+            start = i * process_step   
+            list_in_data.append(sigmas[start:end])
+
+        with multiprocessing.get_context("spawn").Pool(cpu_count) as p:
+            data = p.map(self._compute_models, list_in_data) 
+        return data
+
+class GeneratingRandomAlgorithms():
+    names = [
+        'normal',
+        'not_normal'
+    ]
+
+    def generate(self, weight, sigma, algorithm):
+        if algorithm == 'normal':
+            return self._random_numpy_normal(weight, sigma)
+
+    def _random_numpy_normal(self, weight, sigma):
+        return [np.random.normal(array, sigma) for array in weight]  
+
+
+class _NeuralCrashWindowUI(object):
+    def clearLayout(self, layout):
+        while layout.count():
+            child = layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()    
+
+    def setupUI(self, MainWindow, neuralconfig):
+        self.neuralconfig = neuralconfig
+        self.MainWindow = MainWindow
+        self.MainWindow.setWindowTitle('Test your neural')
+        self.MainWindow.resize(500, 500)
+
+        self.centralWidget = QWidget(self.MainWindow)
+        self.centralWidgetLayout = QVBoxLayout(self.centralWidget)
+        self.centralWidgetLayout.setContentsMargins(0,0,0,0)
+        self.setnewcentralwidget('Checking override functions', self.create_checking_widget())
+
+    def setnewcentralwidget(self, name, widget):
+        self.clearLayout(self.centralWidgetLayout)
+        label = QLabel()
+        label.setText(name)
+        self.centralWidgetLayout.addWidget(label)
+        self.centralWidgetLayout.addWidget(widget)
+        self.MainWindow.setCentralWidget(self.centralWidget)
+        self.MainWindow.setContentsMargins(0, 0, 0, 0)
+
+    def create_checking_widget(self):
+        checkingWidget = CheckingWidget(self.neuralconfig)
+        checkingWidget.checking_ending.connect(self.create_test_config_widget)
+        return checkingWidget
+
+    def create_test_config_widget(self, neuralconfig):
+        self.neuralconfig = neuralconfig
+        testConfigWidget = TestConfigWidget()
+        testConfigWidget.done.connect(self.start_testing)
+        self.setnewcentralwidget('Set test configuration', testConfigWidget)
+
+    def start_testing(self, data):
+        testingWidget = TestingWidget(data, self.neuralconfig)
+        testingWidget.done.connect(self.load_graph_widget)
+        self.setnewcentralwidget('Testing...', testingWidget)
+
+    def load_graph_widget(self, data):
+        resultWidget = ResultWidget(data, self.neuralconfig.test_value)
+        self.setnewcentralwidget('Result', resultWidget)    
+
 class _NeuralCrashWindow(QMainWindow, _NeuralCrashWindowUI):
     def __init__(self, neuralconfig, parent=None):
         super(_NeuralCrashWindow, self).__init__(parent) 
         self.setupUI(self, neuralconfig)
+     
