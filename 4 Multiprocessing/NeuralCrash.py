@@ -1,7 +1,7 @@
-import pickle
-import numpy as np
 import multiprocessing
 from multiprocessing import shared_memory
+import numpy as np
+import pickle
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import (
     QApplication,
@@ -26,14 +26,12 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPlainTextEdit,
 )
-import os
 import sys
 import time
 from math import ceil
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
 import matplotlib
 import datetime
 import openpyxl
@@ -225,7 +223,7 @@ class CheckingWidget(QWidget, CheckingWidget_UI):
 
 class TestConfigWidget_UI(object):
     done = QtCore.pyqtSignal(object)
-    config = np.repeat([i/10000 for i in range(0,1001,20)], 1)
+    config = np.repeat([i/10000 for i in range(0,1001,20)], 5)
     config_changed = QtCore.pyqtSignal()
 
     def setupUI(self, widget):
@@ -274,17 +272,17 @@ class TestConfigWidget_UI(object):
             layouts_edits[i].addWidget(self.line_edits[i])
             layout_sssc.addLayout(layouts_edits[i])
         
+        self.preview = QLabel()
+        self.preview.setText('Config')
+
         self.line_edits[0].setText('0')
         self.line_edits[1].setText('0.005')
         self.line_edits[2].setText('0.0001')
         for i in range(4):
+            self.line_edits[i].textChanged.connect(self.update_config)
             self.line_edits[i].textEdited.connect(self.update_config)
             # self.line_edits[i].textEdited.connect(lambda: print('j'))
         self.line_edits[3].setText('1')    
-
-
-        self.preview = QLabel()
-        self.preview.setText('Don\'t work')
 
         self.sigmalayout.addLayout(layout_sssc)
         self.sigmalayout.addWidget(self.preview)
@@ -320,22 +318,32 @@ class TestConfigWidget_UI(object):
         except ValueError:
             self.setError('Wrong numbers')
             return
-
+        try:
+            1 / step
+            if step < 0:
+                raise ZeroDivisionError
+        except ZeroDivisionError:
+            self.setError('Step must be over 0')
+            return 
+        if start >= stop:
+            self.setError('Start must be less than Stop')
+            return
         self.line_edits[3].setText(str(ntes))    
-        if start > stop:
-            self.setError('Start > Stop')
-            return
-        elif (stop - start) / step < 1:
-            self.setError('Unavailable Step')
-            return
-        elif ntes < 1:
+
+        if ntes < 1:
             self.setError('NTES must be over 0')
             return
+
+        if (stop - start) / step * ntes > 1000000:
+            self.setError('Too large amount of data')
+            return
+
         self.config = np.arange(start, stop, step)
+        self.config = np.around(self.config, 6)    
         if ntes > 1:
             self.config = np.repeat(self.config, ntes)
         if len(self.config) > 8:
-            self.preview.setText('[' + ', '.join(list(map(str, self.config[:3]))) + ', ..., ' + ', '.join(list(map(str, self.config[-3:]))) + ']')
+            self.preview.setText('[' + ', '.join(list(map(str, self.config[:3]))) + ', ..., ' + ', '.join(list(map(str, self.config[-3:]))) + '] | ' + str(len(self.config)) + ' values')
         else:
             self.preview.setText('[' + ', '.join(list(map(str, self.config))) + ']') 
         self.config_changed.emit()       
@@ -713,7 +721,8 @@ class MultiprocessExecution():
 class GeneratingRandomAlgorithms():
     names = [
         'normal',
-        'not_normal'
+        'uniform',
+        ''
     ]
 
     def generate(self, weight, sigma, algorithm):

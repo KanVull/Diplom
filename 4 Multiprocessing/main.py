@@ -56,5 +56,6 @@ class NeuralCrashTest(NeuralCrach):
 if __name__ == '__main__':
     work = NeuralCrashTest()
     work.setName('Tensorflow model')
+    # work.connect('127.0.0.1', '50000')
     work.run()
                         
