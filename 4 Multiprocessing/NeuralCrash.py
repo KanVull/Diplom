@@ -1,3 +1,4 @@
+import pickle
 import numpy as np
 import multiprocessing
 from multiprocessing import shared_memory
@@ -35,6 +36,7 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import matplotlib
 import datetime
+import openpyxl
 
 class NeuralCrach():
     def __init__(self):
@@ -86,6 +88,7 @@ class CheckingWidget_UI(object):
 
         self.layout.addLayout(status)
         self.layout.addWidget(self.error)
+        self.layout.setContentsMargins(0,0,0,0)
         self.check_function_load_model()
 
     def errorprint(self, text, checked_functions):
@@ -247,7 +250,7 @@ class TestConfigWidget_UI(object):
 
         self.layout.addLayout(self.config_layout)
 
-    ## sigma widget
+        ## sigma widget
         self.sigmalayout = QVBoxLayout()
         
         ## 0 - start; 1 - stop; 2 - step; 3 - The number of tests at each step
@@ -262,40 +265,42 @@ class TestConfigWidget_UI(object):
 
         self.line_edits = [QLineEdit() for _ in range(4)]
         for i in range(3):
-            self.line_edits[i].setToolTip('Int or float number; . is delimiter')
+            self.line_edits[i].setToolTip('Int or float number\n. is delimiter')
         self.line_edits[3].setToolTip('Int number > 0')
-
-        self.line_edits[0].setText('0')
-        self.line_edits[1].setText('0.005')
-        self.line_edits[2].setText('0.0001')
-        for i in range(4):
-            self.line_edits[i].textEdited.connect(self.update)
-        self.line_edits[3].setText('1')    
 
         layout_sssc = QHBoxLayout()
         for i in range(4):
             layouts_edits[i].addWidget(labels_edits[i])
             layouts_edits[i].addWidget(self.line_edits[i])
             layout_sssc.addLayout(layouts_edits[i])
+        
+        self.line_edits[0].setText('0')
+        self.line_edits[1].setText('0.005')
+        self.line_edits[2].setText('0.0001')
+        for i in range(4):
+            self.line_edits[i].textEdited.connect(self.update_config)
+            # self.line_edits[i].textEdited.connect(lambda: print('j'))
+        self.line_edits[3].setText('1')    
+
 
         self.preview = QLabel()
-        self.preview.setText('jope')
+        self.preview.setText('Don\'t work')
 
         self.sigmalayout.addLayout(layout_sssc)
         self.sigmalayout.addWidget(self.preview)
 
         self.config_changed.connect(self.setConfig)
         self.layout.addLayout(self.sigmalayout)
+        self.layout.addStretch(0)
 
-    ## sigma ended
+        ## sigma ended
 
         self.buttonstart = QPushButton()
         self.buttonstart.clicked.connect(self.onStarted)
         self.setConfig()
         self.buttonstart.setText('Start test')
-        self.layout.addWidget(self.buttonstart)  
-
-        self.num_processors.valueChanged[int].connect(self.update) 
+        self.layout.addWidget(self.buttonstart)
+        self.layout.setContentsMargins(0,0,0,0)  
 
     def getMaximumProcessorCount(self):
         return multiprocessing.cpu_count()    
@@ -305,17 +310,18 @@ class TestConfigWidget_UI(object):
         self.config = None
         self.config_changed.emit()
 
-    def update(self):
-        numbers = (edit.text() for edit in self.line_edits)
+    def update_config(self):
+        numbers = [edit.text() for edit in self.line_edits]
         try:
-            start = float(numbers[0])
+            start = float(numbers[0])       
             stop = float(numbers[1])
             step = float(numbers[2])
             ntes = int(numbers[3])
-        except Exception:
+        except ValueError:
             self.setError('Wrong numbers')
             return
-        self.line_edits[3] = ntes    
+
+        self.line_edits[3].setText(str(ntes))    
         if start > stop:
             self.setError('Start > Stop')
             return
@@ -329,9 +335,9 @@ class TestConfigWidget_UI(object):
         if ntes > 1:
             self.config = np.repeat(self.config, ntes)
         if len(self.config) > 8:
-            self.preview.setText('[' + ', '.join(self.config[:3]) + ', ..., ' + ', '.join(self.config[-3:]) + ']')
+            self.preview.setText('[' + ', '.join(list(map(str, self.config[:3]))) + ', ..., ' + ', '.join(list(map(str, self.config[-3:]))) + ']')
         else:
-            self.preview.setText('[' + ', '.join(self.config) + ']') 
+            self.preview.setText('[' + ', '.join(list(map(str, self.config))) + ']') 
         self.config_changed.emit()       
 
     def setConfig(self):
@@ -356,6 +362,9 @@ class TestingWidget_UI(object):
     def setupUI(self, widget, data, neuralconfig):
         self.data = data
         self.neuralconfig = neuralconfig
+        self.previous_pos = 0
+        self.seconds_per_operation = 0
+        self.seconds_per_operation_list = list()
         
         self.layout = QVBoxLayout(widget)
         self.label_average = QLabel()
@@ -367,10 +376,8 @@ class TestingWidget_UI(object):
         self.progress_bar.setMinimum(0)
         self.progress_bar.setMaximum(len(data['config']))
         self.layout.addWidget(self.progress_bar)
+        self.layout.setContentsMargins(0,0,0,0)
 
-        self.previous_pos = 0
-        self.seconds_per_operation = 0
-        self.seconds_per_operation_list = list()
 
         self.start_test()
 
@@ -432,10 +439,10 @@ class TestingWidget(QWidget, TestingWidget_UI):
 
 
 class MplCanvas(FigureCanvasQTAgg):
-    def __init__(self, parent=None, width=5, height=4, dpi=100):
-        fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axes = fig.add_subplot(111)
-        super(MplCanvas, self).__init__(fig)
+    def __init__(self, parent=None, width=5, height=4, dpi=300):
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = self.fig.add_subplot(111)
+        super(MplCanvas, self).__init__(self.fig)
 
 class ResultWidget_UI(object):
     another_test = QtCore.pyqtSignal()
@@ -452,11 +459,13 @@ class ResultWidget_UI(object):
         self.layout.addWidget(self.canvas)
 
         button_save_excel = QPushButton()
-        button_save_excel.setText('Save to Excel')
         button_save_txt = QPushButton()
-        button_save_txt.setText('Save to txt')
         button_another_test = QPushButton()
+
+        button_save_excel.setText('Save to Excel')
+        button_save_txt.setText('Save to txt')
         button_another_test.setText('Try another config')
+        
         button_save_excel.clicked.connect(lambda: self.save('excel'))
         button_save_txt.clicked.connect(lambda: self.save('txt'))
         button_another_test.clicked.connect(lambda: self.another_test.emit())
@@ -468,6 +477,7 @@ class ResultWidget_UI(object):
         buttons_layout.addWidget(button_save_txt)
 
         self.layout.addLayout(buttons_layout)
+        self.layout.setContentsMargins(0,0,0,0)
 
     def getXY_values(self):
         XY_data = {}
@@ -508,12 +518,7 @@ class ResultWidget_UI(object):
         self.data = XY_data                   
 
     def getGraph(self):
-        font = {
-            'weight': 'normal',
-            'size': 12
-        }
         matplotlib.use('Qt5Agg')
-        matplotlib.rc('font', **font)
 
         sc = MplCanvas(self, width=5, height=5, dpi=100)
 
@@ -522,7 +527,7 @@ class ResultWidget_UI(object):
         sc.axes.set_ylabel('Test results')
         sc.axes.set_title(self.name + ' | ' + self.test_time)
         toolbar = NavigationToolbar2QT(sc, self)
-
+        sc.fig.tight_layout()
         return toolbar, sc
 
     def save(self, save_type):
@@ -542,20 +547,44 @@ class ResultWidget(QWidget, ResultWidget_UI):
 
 class Saver():
     def __init__(self, data, save_type):
-        self.data = data
-        self.save_type = save_type
+        self._data = data
+        self._save_type = save_type
 
     def save(self):
-        if self.save_type == 'excel':
-            self.__save_to_excel()
-        elif self.save_type == 'txt':
-            self.__save_to_txt()
+        if self._save_type == 'excel':
+            self._save_to_excel()
+        elif self._save_type == 'txt':
+            self._save_to_txt()
 
-    def __save_to_excel(self):
-        pass
+    def _save_to_excel(self):
+        wb = openpyxl.Workbook()
+        ws = wb.worksheets[0]
+        ws.cell(row=1, column=1).value = 'Name of model: ' + self._data['name']
+        ws.cell(row=2, column=1).value = 'Tested: ' + self._data['time']
+        ws.cell(row=3, column=1).value = 'Your model tested value: ' + str(self._data['test_value'])
+        ws.cell(row=5, column=1).value = 'Sigma'
+        ws.cell(row=5, column=2).value = 'Tested value'
+        for row, key in enumerate(list(self._data['data'].keys())):
+            ws.cell(row=row + 6, column=1).value = key
+            ws.cell(row=row + 6, column=2).value = self._data['data'][key][0]
 
-    def __save_to_txt(self):
-        pass                 
+
+        filepath = QFileDialog.getSaveFileName(caption='Save your test result to excel file',
+                                               directory=f'./',
+                                               filter='Excel file (*.xlsx)')
+        wb.save(filepath[0])
+
+    def _save_to_txt(self):
+        filepath = QFileDialog.getSaveFileName(caption='Save your test result to txt file',
+                                               directory=f'./',
+                                               filter='Text file (*.txt)')
+        with open(filepath[0], 'w') as f:
+            f.write('Name of model: ' + self._data['name'] + '\n')
+            f.write('Tested: ' + self._data['time'] + '\n')
+            f.write('Your model tested value: ' + str(self._data['test_value']) + '\n\n')
+            f.write('Sigma\tTested value\n')
+            for key, value in self._data['data'].items():
+                f.write(str(key) + '\t' + str(value[0]) + '\n')
 
 
 class AnimationTimer(QtCore.QThread):
@@ -568,6 +597,17 @@ class AnimationTimer(QtCore.QThread):
         while not self.isInterruptionRequested():
             self.time_passes.emit()
             time.sleep(self.tick_time)
+
+class Custom_Exception(Exception):
+    pass
+
+class PickleProblem(Custom_Exception):
+    '''raised when model is not pickleable'''
+    pass
+
+class NumpyProblem(Custom_Exception):
+    '''raised when get_tested_data returns not a list of numpy arrays'''
+    pass
 
 class Check_function(QtCore.QObject):
     return_new_state = QtCore.pyqtSignal(NeuralCrach)
@@ -584,12 +624,21 @@ class Check_function(QtCore.QObject):
         try:
             if self.name == 'load_model':
                 self.neuralconfig.load_model()
+                try:
+                    pickle.dumps(self.neuralconfig.model)
+                except TypeError:
+                    raise PickleProblem
 
             elif self.name == 'load_testdata':
                 self.neuralconfig.load_testdata()
 
             elif self.name == 'get_tested_values':
                 self.neuralconfig._basedata = self.neuralconfig.get_tested_values()
+                if type(self.neuralconfig._basedata) is not list:
+                    raise NumpyProblem
+                for array in self.neuralconfig._basedata:
+                    if type(array) is not np.ndarray:
+                        raise NumpyProblem  
 
             elif self.name == 'set_tested_values':
                 self.neuralconfig.set_tested_values(self.neuralconfig._basedata)
@@ -598,6 +647,12 @@ class Check_function(QtCore.QObject):
                 self.neuralconfig._test_value = self.neuralconfig.test_model(self.neuralconfig.model, self.neuralconfig.testdata)
 
             self.function_checked_signal.emit(self.name, 'OK')    
+        except PickleProblem:
+            self.function_checked_signal.emit(self.name, 'ERROR')
+            self.error_signal.emit('Your model is not pickleable.\nTry to pickle your model before launch the program', self.name)
+        except NumpyProblem:
+            self.function_checked_signal.emit(self.name, 'ERROR')
+            self.error_signal.emit('This method must returns a list of numpy arrays (numpy.ndarray)', self.name)
         except Exception as e:
             self.function_checked_signal.emit(self.name, 'ERROR')
             self.error_signal.emit(str(e), self.name)
@@ -684,7 +739,7 @@ class _NeuralCrashWindowUI(object):
 
         self.centralWidget = QWidget(self.MainWindow)
         self.centralWidgetLayout = QVBoxLayout(self.centralWidget)
-        self.centralWidgetLayout.setContentsMargins(0,0,0,0)
+        # self.centralWidgetLayout.setContentsMargins(0,0,0,0)
         self.create_checking_widget()
         
 
@@ -692,10 +747,12 @@ class _NeuralCrashWindowUI(object):
         self.clearLayout(self.centralWidgetLayout)
         label = QLabel()
         label.setText(name)
+        label.setFont(QtGui.QFont('Arial', 12))
+        label.setFixedHeight(30)
         self.centralWidgetLayout.addWidget(label)
         self.centralWidgetLayout.addWidget(widget)
         self.MainWindow.setCentralWidget(self.centralWidget)
-        self.MainWindow.setContentsMargins(0, 0, 0, 0)
+        # self.MainWindow.setContentsMargins(0, 0, 0, 0)
 
     def create_checking_widget(self):
         checkingWidget = CheckingWidget(self.neuralconfig)
@@ -703,17 +760,20 @@ class _NeuralCrashWindowUI(object):
         self.setnewcentralwidget('Checking override functions', checkingWidget)
 
     def create_test_config_widget(self, neuralconfig):
+        self.MainWindow.resize(500, 180)
         self.neuralconfig = neuralconfig
         testConfigWidget = TestConfigWidget()
         testConfigWidget.done.connect(self.start_testing)
         self.setnewcentralwidget('Set test configuration', testConfigWidget)
 
     def start_testing(self, data):
+        self.MainWindow.resize(500, 100)
         testingWidget = TestingWidget(data, self.neuralconfig)
         testingWidget.done.connect(self.load_graph_widget)
         self.setnewcentralwidget('Testing', testingWidget)
 
     def load_graph_widget(self, data):
+        self.MainWindow.resize(700, 700)
         resultWidget = ResultWidget(data, self.neuralconfig._test_value, self.neuralconfig._name)
         resultWidget.another_test.connect(lambda: self.create_test_config_widget(self.neuralconfig))
         self.setnewcentralwidget('Result', resultWidget)    

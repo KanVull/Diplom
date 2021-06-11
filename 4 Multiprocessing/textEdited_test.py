@@ -21,17 +21,27 @@ class UI(object):
         self.centralWidget.setObjectName('centralwidget')
         self.centralWidgetLayout = QVBoxLayout(self.centralWidget)
         self.centralWidgetLayout.setContentsMargins(0,0,0,0)
+        self.setNewCentral()
+
+    def setNewCentral(self):
+        self.centralWidgetLayout.addWidget(W())
+        self.MainWindow.setCentralWidget(self.centralWidget) 
+
+class W_UI(object):
+    def setupUI(self, widget):
+        self.layout = QVBoxLayout(widget)
         self.line = QLineEdit()
         self.line.textEdited.connect(self.jopa)
-        self.setNewCentral(self.line)
-
-    def setNewCentral(self, widget):
-        self.centralWidgetLayout.addWidget(widget)
-        self.MainWindow.setCentralWidget(self.centralWidget)
+        self.layout.addWidget(self.line)
 
     def jopa(self):
-        print(self.line.text())    
+        print(self.line.text()) 
 
+
+class W(QWidget, W_UI):
+    def __init__(self, parent=None):
+        super(W, self).__init__(parent) 
+        self.setupUI(self)      
 
 class Window(QMainWindow, UI):
     def __init__(self, parent=None):
