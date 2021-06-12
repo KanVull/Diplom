@@ -515,8 +515,7 @@ class ResultWidget_UI(object):
                 self.minX = key
 
             # counting Y
-            if len(XY_data[key]) > 1:
-                XY_data[key] = np.average(XY_data[key])
+            XY_data[key] = np.average(XY_data[key])
 
             # min max Y
             if self.maxY is None:
@@ -536,7 +535,7 @@ class ResultWidget_UI(object):
         sc = MplCanvas(self, width=5, height=5, dpi=100)
 
         sc.axes.plot(list(self.data.keys()), list(self.data.values()))
-        sc.axes.set_xlabel(self.algorithm.value_name.capitalize() + '(numpy.' + self.algorithm.algorithm + ')')
+        sc.axes.set_xlabel(self.algorithm.value_name.capitalize() + ' (numpy.' + self.algorithm.algorithm + ')')
         sc.axes.set_ylabel('Test results')
         sc.axes.set_title(self.name + ' | ' + self.test_time)
         toolbar = NavigationToolbar2QT(sc, self)
