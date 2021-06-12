@@ -14,7 +14,6 @@ def unpack(model, training_config, weights):
         )
     restored_model.set_weights(weights)
     return restored_model
-# Hotfix function
 def make_keras_picklable():
 
     def __reduce__(self):
@@ -26,7 +25,6 @@ def make_keras_picklable():
 
     cls = Model
     cls.__reduce__ = __reduce__
-# Run the function
 make_keras_picklable()
 
 class NeuralCrashTest(NeuralCrach):
@@ -39,7 +37,7 @@ class NeuralCrashTest(NeuralCrach):
     def load_testdata(self):
         (_, _), (testX, testY) = fashion_mnist.load_data()
         testX = testX.reshape(testX.shape[0], 784) / 255
-        self.testdata = (testX, testY)
+        self.testdata = testX, testY
 
     def get_tested_values(self):
         return self.model.get_weights()
