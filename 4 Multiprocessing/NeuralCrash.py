@@ -1,5 +1,3 @@
-from multiprocessing.context import Process
-from memory_profiler import profile
 import multiprocessing
 from multiprocessing import shared_memory
 import numpy as np
