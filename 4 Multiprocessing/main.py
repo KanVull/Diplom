@@ -3,6 +3,7 @@ from tensorflow.keras.datasets import fashion_mnist
 from tensorflow.keras.models import Model, load_model
 from tensorflow.python.keras.layers import deserialize, serialize
 from tensorflow.python.keras.saving import saving_utils
+import copy
 
 def unpack(model, training_config, weights):
     restored_model = deserialize(model)
@@ -54,6 +55,6 @@ class NeuralCrashTest(NeuralCrach):
 if __name__ == '__main__':
     work = NeuralCrashTest()
     work.setName('Tensorflow model')
-    # work.connect('127.0.0.1', '50000')
+
     work.run()
                         

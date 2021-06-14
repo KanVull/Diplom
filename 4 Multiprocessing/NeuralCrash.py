@@ -41,7 +41,7 @@ class NeuralCrach():
     def __init__(self):
         self.model = None
         self._name = 'NoName'
-        self._sigma = None
+        self._value = None
         self._test_value = None
 
     def setName(self, name_of_model):
@@ -492,7 +492,6 @@ class ResultWidget_UI(object):
 
     def getXY_values(self):
         XY_data = {}
-        self.minX, self.minY, self.maxX, self.maxY = None, None, None, None
         for lst in self.data:
             for sigma_result in lst:
                 if sigma_result[0] in XY_data:
@@ -502,28 +501,7 @@ class ResultWidget_UI(object):
             del(sigma_result)        
         del(lst)            
         for key in XY_data.keys():
-            # min max X
-            if self.maxX is None:
-                self.maxX = key
-            elif key > self.maxX:
-                self.maxX = key
-            if self.minX is None:
-                self.minX = key    
-            elif key < self.minX:
-                self.minX = key
-
-            # counting Y
             XY_data[key] = np.average(XY_data[key])
-
-            # min max Y
-            if self.maxY is None:
-                self.maxY = XY_data[key] 
-            elif XY_data[key]  > self.maxY:
-                self.maxY = XY_data[key]
-            if self.minY is None:
-                self.minY = XY_data[key]     
-            elif XY_data[key]  < self.minY:
-                self.minY = XY_data[key] 
 
         self.data = XY_data                   
 
