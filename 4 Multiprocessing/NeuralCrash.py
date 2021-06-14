@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
     QMessageBox,
     QProgressBar,
+    QSizePolicy,
     QSpinBox,
     QTextEdit,
     QVBoxLayout, 
@@ -222,9 +223,9 @@ class CheckingWidget(QWidget, CheckingWidget_UI):
 
 
 class TestConfigWidget_UI(object):
-    done = QtCore.pyqtSignal(object)
-    config = np.repeat([i/10000 for i in range(0,1001,20)], 5)
+    config = None
     config_changed = QtCore.pyqtSignal()
+    done = QtCore.pyqtSignal(object)
 
     def setupUI(self, widget):
         self.layout = QVBoxLayout(widget)
@@ -239,9 +240,9 @@ class TestConfigWidget_UI(object):
         label_processors.setText('Specify the number of processors used')
         self.config_layout.addRow(self.num_processors, label_processors)
 
-        algorithms = GeneratingRandomAlgorithms()
+        self.algorithm = GeneratingRandomAlgorithms('normal')
         self.algorithmComboBox = QComboBox()
-        self.algorithmComboBox.addItems(algorithms.names)
+        self.algorithmComboBox.addItems(self.algorithm.names)
         algorithmLabel = QLabel()
         algorithmLabel.setText('Choose algorithm')
         self.config_layout.addRow(self.algorithmComboBox, algorithmLabel)
@@ -352,8 +353,9 @@ class TestConfigWidget_UI(object):
         self.buttonstart.setEnabled(self.config is not None)
 
     def onStarted(self):
+        self.algorithm.set_algorithm(self.algorithmComboBox.currentText())
         data = {
-            'algorithm': self.algorithmComboBox.currentText(),
+            'algorithm': self.algorithm,
             'config': self.config,
             'processors': int(self.num_processors.text())
         }
@@ -366,7 +368,7 @@ class TestConfigWidget(QWidget, TestConfigWidget_UI):
 
 
 class TestingWidget_UI(object):
-    done = QtCore.pyqtSignal(object)
+    done = QtCore.pyqtSignal(object, object)
     def setupUI(self, widget, data, neuralconfig):
         self.data = data
         self.neuralconfig = neuralconfig
@@ -438,7 +440,7 @@ class TestingWidget_UI(object):
 
     def load_graph(self, data):
         del(self.shm)
-        self.done.emit(data)
+        self.done.emit(data, self.data['algorithm'])
 
 class TestingWidget(QWidget, TestingWidget_UI):
     def __init__(self, data, neuralconfig, parent=None):
@@ -454,11 +456,12 @@ class MplCanvas(FigureCanvasQTAgg):
 
 class ResultWidget_UI(object):
     another_test = QtCore.pyqtSignal()
-    def setupUI(self, widget, data, test_value, name):
+    def setupUI(self, widget, data, algorithm, test_value, name):
         self.data = data
+        self.algorithm = algorithm
         self.test_value = test_value
-        self.test_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         self.name = name
+        self.test_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
         self.layout = QVBoxLayout(widget)
         self.getXY_values()
@@ -510,8 +513,7 @@ class ResultWidget_UI(object):
                 self.minX = key
 
             # counting Y
-            if len(XY_data[key]) > 1:
-                XY_data[key] = np.average(XY_data[key])
+            XY_data[key] = np.average(XY_data[key])
 
             # min max Y
             if self.maxY is None:
@@ -531,7 +533,7 @@ class ResultWidget_UI(object):
         sc = MplCanvas(self, width=5, height=5, dpi=100)
 
         sc.axes.plot(list(self.data.keys()), list(self.data.values()))
-        sc.axes.set_xlabel('Sigma')
+        sc.axes.set_xlabel(self.algorithm.value_name.capitalize() + ' (numpy.' + self.algorithm.algorithm + ')')
         sc.axes.set_ylabel('Test results')
         sc.axes.set_title(self.name + ' | ' + self.test_time)
         toolbar = NavigationToolbar2QT(sc, self)
@@ -544,14 +546,15 @@ class ResultWidget_UI(object):
             'data': self.data,
             'time': self.test_time,
             'test_value': self.test_value,
+            'algorithm': self.algorithm,
         }
         saver = Saver(data, save_type)
         saver.save()
 
 class ResultWidget(QWidget, ResultWidget_UI):
-    def __init__(self, data, test_value, name, parent=None):
+    def __init__(self, data, algorithm, test_value, name, parent=None):
         super(ResultWidget, self).__init__(parent) 
-        self.setupUI(self, data, test_value, name)
+        self.setupUI(self, data, algorithm, test_value, name)
 
 class Saver():
     def __init__(self, data, save_type):
@@ -570,11 +573,12 @@ class Saver():
         ws.cell(row=1, column=1).value = 'Name of model: ' + self._data['name']
         ws.cell(row=2, column=1).value = 'Tested: ' + self._data['time']
         ws.cell(row=3, column=1).value = 'Your model tested value: ' + str(self._data['test_value'])
-        ws.cell(row=5, column=1).value = 'Sigma'
-        ws.cell(row=5, column=2).value = 'Tested value'
+        ws.cell(row=4, column=1).value = 'Generating random algorithm: numpy.' + self._data['algorithm'].algorithm
+        ws.cell(row=6, column=1).value = self._data['algorithm'].value_name.capitalize()
+        ws.cell(row=6, column=2).value = 'Tested value'
         for row, key in enumerate(list(self._data['data'].keys())):
-            ws.cell(row=row + 6, column=1).value = key
-            ws.cell(row=row + 6, column=2).value = self._data['data'][key][0]
+            ws.cell(row=row + 7, column=1).value = key
+            ws.cell(row=row + 7, column=2).value = self._data['data'][key]
 
 
         filepath = QFileDialog.getSaveFileName(caption='Save your test result to excel file',
@@ -589,10 +593,11 @@ class Saver():
         with open(filepath[0], 'w') as f:
             f.write('Name of model: ' + self._data['name'] + '\n')
             f.write('Tested: ' + self._data['time'] + '\n')
-            f.write('Your model tested value: ' + str(self._data['test_value']) + '\n\n')
-            f.write('Sigma\tTested value\n')
+            f.write('Your model tested value: ' + str(self._data['test_value']) + '\n')
+            f.write('Generating random algorithm: numpy.' + self._data['algorithm'].algorithm + '\n\n')
+            f.write(f'{self._data["algorithm"].value_name.capitalize()}\tTested value\n')
             for key, value in self._data['data'].items():
-                f.write(str(key) + '\t' + str(value[0]) + '\n')
+                f.write(f'{key}\t{value}\n')
 
 
 class AnimationTimer(QtCore.QThread):
@@ -669,7 +674,7 @@ class Check_function(QtCore.QObject):
         self.done.emit()      
 
 class Testing_function(QtCore.QThread):
-    done = QtCore.pyqtSignal(object)
+    done = QtCore.pyqtSignal(object, object)
 
     def __init__(self, data, neuralconfig, shm_name):
         QtCore.QObject.__init__(self)
@@ -681,56 +686,87 @@ class Testing_function(QtCore.QThread):
     def run(self):
         multiprocessExecution = MultiprocessExecution(self.data, self.neuralconfig, self.shm_name)
         data = multiprocessExecution.multiprocessingCalc()
-        self.done.emit(data) 
+        self.done.emit(data, self.data['algorithm']) 
 
 class MultiprocessExecution():
     def __init__(self, data, neuralconfig, shm_name):
         self.data = data
-        self.algorithm = GeneratingRandomAlgorithms()
         self.neuralconfig = neuralconfig
         self.shm_name = shm_name
 
-    def _create_new_model(self, sigma):
-        new_weights = self.algorithm.generate(self.neuralconfig._basedata, sigma, self.data['algorithm'])
+    def _create_new_model(self, value):
+        new_weights = self.data['algorithm'].generate(self.neuralconfig._basedata, value)
         return self.neuralconfig.set_tested_values(new_weights)
 
-    def _compute_models(self, sigmas):
+    def _compute_models(self, values):
         data = list()
         shm = shared_memory.ShareableList(name=self.shm_name)
-        for sigma in sigmas:
-            model = self._create_new_model(sigma)
-            data.append((sigma, self.neuralconfig.test_model(model, self.neuralconfig.testdata)))
-            del(model)
+        for value in values:
+            model = self._create_new_model(value)
+            data.append((value, self.neuralconfig.test_model(model, self.neuralconfig.testdata)))
             shm[0] += 1
-        return data  
+        return data    
 
     def multiprocessingCalc(self):
-        sigmas = self.data['config']
+        values = self.data['config']
         cpu_count = self.data['processors']
-        process_step = ceil(len(sigmas) / cpu_count)
+        process_step = ceil(len(values) / cpu_count)
         list_in_data = list()
-        for i in range(ceil(len(sigmas) / process_step)):
-            end = i * process_step + process_step if i + process_step <= len(sigmas) else len(sigmas)
+        for i in range(ceil(len(values) / process_step)):
+            end = i * process_step + process_step if i + process_step <= len(values) else len(values)
             start = i * process_step   
-            list_in_data.append(sigmas[start:end])
+            list_in_data.append(values[start:end])
 
         with multiprocessing.get_context("spawn").Pool(cpu_count) as p:
-            data = p.map(self._compute_models, list_in_data) 
+            data = p.map(self._compute_models, list_in_data)
+
         return data
 
 class GeneratingRandomAlgorithms():
     names = [
         'normal',
         'uniform',
-        ''
+        'poisson',
     ]
 
-    def generate(self, weight, sigma, algorithm):
-        if algorithm == 'normal':
-            return self._random_numpy_normal(weight, sigma)
+    def __init__(self, algorithm='normal'):
+        if not self.set_algorithm(algorithm):
+            self.algorithm = 'normal'
+            self.value_name = 'sigma'
+
+    def set_algorithm(self, algorithm):
+        if algorithm in self.names:
+            self.algorithm = algorithm
+            if algorithm == 'normal':
+                self.value_name = 'sigma'
+            elif algorithm == 'uniform':
+                self.value_name = 'deviation'
+            elif algorithm == 'poisson':
+                self.value_name = 'lambda'    
+            return True
+        else:
+            return False
+
+    def generate(self, weight, value):
+        if self.algorithm == 'normal':
+            return self._random_numpy_normal(weight, value)
+        elif self.algorithm == 'uniform':
+            return self._random_numpy_uniform(weight, value)
+        elif self.algorithm == 'poisson':
+            return self._random_numpy_poisson(weight, value)        
 
     def _random_numpy_normal(self, weight, sigma):
-        return [np.random.normal(array, sigma) for array in weight]  
+        return [np.random.normal(array, sigma) for array in weight]
+
+    def _random_numpy_uniform(self, weight, deviation):
+        def generate_number(number):
+            return number + np.random.uniform(-deviation, deviation, size=1)
+        return [generate_number(array) for array in weight]  
+
+    def _random_numpy_poisson(self, weight, _lambda):
+        def generate_number(number):
+            return number + np.random.poisson(_lambda)
+        return [generate_number(array) for array in weight]            
 
 
 class _NeuralCrashWindowUI(object):
@@ -781,9 +817,9 @@ class _NeuralCrashWindowUI(object):
         testingWidget.done.connect(self.load_graph_widget)
         self.setnewcentralwidget('Testing', testingWidget)
 
-    def load_graph_widget(self, data):
+    def load_graph_widget(self, data, algorithm):
         self.MainWindow.resize(700, 700)
-        resultWidget = ResultWidget(data, self.neuralconfig._test_value, self.neuralconfig._name)
+        resultWidget = ResultWidget(data, algorithm, self.neuralconfig._test_value, self.neuralconfig._name)
         resultWidget.another_test.connect(lambda: self.create_test_config_widget(self.neuralconfig))
         self.setnewcentralwidget('Result', resultWidget)    
 
