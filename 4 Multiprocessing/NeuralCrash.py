@@ -37,7 +37,7 @@ import matplotlib
 import datetime
 import openpyxl
 
-class NeuralCrach():
+class NeuralCrash():
     def __init__(self):
         self.model = None
         self._name = 'NoName'
@@ -54,7 +54,7 @@ class NeuralCrach():
         app.exec_()   
 
 class CheckingWidget_UI(object):
-    checking_ending = QtCore.pyqtSignal(NeuralCrach)
+    checking_ending = QtCore.pyqtSignal(NeuralCrash)
 
     def setupUI(self, widget, neuralconfig):
         self.neuralconfig = neuralconfig
@@ -601,7 +601,7 @@ class NumpyProblem(Custom_Exception):
     pass
 
 class Check_function(QtCore.QObject):
-    return_new_state = QtCore.pyqtSignal(NeuralCrach)
+    return_new_state = QtCore.pyqtSignal(NeuralCrash)
     function_checked_signal = QtCore.pyqtSignal(str, str)
     error_signal = QtCore.pyqtSignal(str, str)
     done = QtCore.pyqtSignal()

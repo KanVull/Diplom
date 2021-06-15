@@ -1,9 +1,8 @@
-from NeuralCrash import NeuralCrach
+from NeuralCrash import NeuralCrash
 from tensorflow.keras.datasets import fashion_mnist
 from tensorflow.keras.models import Model, load_model
 from tensorflow.python.keras.layers import deserialize, serialize
 from tensorflow.python.keras.saving import saving_utils
-import copy
 
 def unpack(model, training_config, weights):
     restored_model = deserialize(model)
@@ -28,7 +27,7 @@ def make_keras_picklable():
     cls.__reduce__ = __reduce__
 make_keras_picklable()
 
-class NeuralCrashTest(NeuralCrach):
+class NeuralCrashTest(NeuralCrash):
     def __init__(self):
         super().__init__()
 
@@ -38,7 +37,7 @@ class NeuralCrashTest(NeuralCrach):
     def load_testdata(self):
         (_, _), (testX, testY) = fashion_mnist.load_data()
         testX = testX.reshape(testX.shape[0], 784) / 255
-        self.testdata = testX, _
+        self.testdata = testX, testY
 
     def get_tested_values(self):
         return self.model.get_weights()
