@@ -705,6 +705,7 @@ class GeneratingRandomAlgorithms():
         'normal',
         'uniform',
         'poisson',
+        # 'rayleigh',
     ]
 
     def __init__(self, algorithm='normal'):
@@ -720,7 +721,9 @@ class GeneratingRandomAlgorithms():
             elif algorithm == 'uniform':
                 self.value_name = 'deviation'
             elif algorithm == 'poisson':
-                self.value_name = 'lambda'    
+                self.value_name = 'lambda'
+            # elif algorithm == 'rayleigh':
+            #     self.value_name = 'scale'         
             return True
         else:
             return False
@@ -731,7 +734,9 @@ class GeneratingRandomAlgorithms():
         elif self.algorithm == 'uniform':
             return self._random_numpy_uniform(weight, value)
         elif self.algorithm == 'poisson':
-            return self._random_numpy_poisson(weight, value)        
+            return self._random_numpy_poisson(weight, value)
+        # elif self.algorithm == 'rayleigh':
+        #     return self._random_numpy_rayleigh(weight, value)              
 
     def _random_numpy_normal(self, weight, sigma):
         return [np.random.normal(array, sigma) for array in weight]
@@ -744,7 +749,10 @@ class GeneratingRandomAlgorithms():
     def _random_numpy_poisson(self, weight, _lambda):
         def generate_number(number):
             return number + np.random.poisson(_lambda)
-        return [generate_number(array) for array in weight]            
+        return [generate_number(array) for array in weight]
+
+    # def _random_numpy_rayleigh(self, weight, scale):
+    #     return [np.random.rayleigh(array, scale) for array in weight]                
 
 
 class _NeuralCrashWindowUI(object):
