@@ -704,8 +704,6 @@ class GeneratingRandomAlgorithms():
     names = [
         'normal',
         'uniform',
-        'poisson',
-        # 'rayleigh',
     ]
 
     def __init__(self, algorithm='normal'):
@@ -719,11 +717,7 @@ class GeneratingRandomAlgorithms():
             if algorithm == 'normal':
                 self.value_name = 'sigma'
             elif algorithm == 'uniform':
-                self.value_name = 'deviation'
-            elif algorithm == 'poisson':
-                self.value_name = 'lambda'
-            # elif algorithm == 'rayleigh':
-            #     self.value_name = 'scale'         
+                self.value_name = 'deviation'       
             return True
         else:
             return False
@@ -732,11 +726,7 @@ class GeneratingRandomAlgorithms():
         if self.algorithm == 'normal':
             return self._random_numpy_normal(weight, value)
         elif self.algorithm == 'uniform':
-            return self._random_numpy_uniform(weight, value)
-        elif self.algorithm == 'poisson':
-            return self._random_numpy_poisson(weight, value)
-        # elif self.algorithm == 'rayleigh':
-        #     return self._random_numpy_rayleigh(weight, value)              
+            return self._random_numpy_uniform(weight, value)           
 
     def _random_numpy_normal(self, weight, sigma):
         return [np.random.normal(array, sigma) for array in weight]
@@ -745,15 +735,7 @@ class GeneratingRandomAlgorithms():
         def generate_number(number):
             return number + np.random.uniform(-deviation, deviation, size=1)
         return [generate_number(array) for array in weight]  
-
-    def _random_numpy_poisson(self, weight, _lambda):
-        def generate_number(number):
-            return number + np.random.poisson(_lambda)
-        return [generate_number(array) for array in weight]
-
-    # def _random_numpy_rayleigh(self, weight, scale):
-    #     return [np.random.rayleigh(array, scale) for array in weight]                
-
+               
 
 class _NeuralCrashWindowUI(object):
     def clearLayout(self, layout):
